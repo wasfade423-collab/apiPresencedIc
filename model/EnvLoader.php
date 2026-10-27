@@ -6,8 +6,11 @@ final class EnvLoader
 {
     public static function load(string $path): void
     {
+        if (!file_exists($path)) {
+            return;
+        }
         if (!is_file($path) || !is_readable($path)) {
-            throw new RuntimeException(sprintf('Le fichier de configuration "%s" est introuvable ou illisible.', $path));
+            throw new RuntimeException(sprintf('Le fichier de configuration "%s" est illisible.', $path));
         }
 
         $lines = file($path, FILE_IGNORE_NEW_LINES);
@@ -45,23 +48,19 @@ final class EnvLoader
                 $value = preg_replace('/\s+#.*$/', '', $value) ?? $value;
             }
 
-            $existingValue = getenv($name);
-            if ($existingValue !== false) {
+            if (array_key_exists($name, $_ENV) || array_key_exists($name, $_SERVER)) {
                 continue;
             }
 
-            if (array_key_exists($name, $_ENV)) {
-                $value = (string) $_ENV[$name];
-            } elseif (array_key_exists($name, $_SERVER)) {
-                $value = (string) $_SERVER[$name];
-            } else {
-                $_ENV[$name] = $value;
-                $_SERVER[$name] = $value;
-            }
-
-            if (!putenv($name . '=' . $value)) {
-                throw new RuntimeException(sprintf('Impossible de charger la variable "%s" depuis le fichier .env.', $name));
-            }
+            $_ENV[$name] = $value;
+            $_SERVER[$name] = $value;
         }
+    }
+
+    public static function get(string $name): ?string
+    {
+        $value = $_ENV[$name] ?? $_SERVER[$name] ?? null;
+
+        return is_string($value) ? $value : null;
     }
 }

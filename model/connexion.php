@@ -13,10 +13,10 @@ class Database
 
     public function getClient(): MongoDB\Client
     {
-        $uri = getenv('MONGODB_URI');
-        $databaseName = getenv('MONGODB_DATABASE');
+        $uri = EnvLoader::get('MONGODB_URI');
+        $databaseName = EnvLoader::get('MONGODB_DATABASE');
 
-        if ($uri === false || $uri === '' || $databaseName === false || $databaseName === '') {
+        if ($uri === null || $uri === '' || $databaseName === null || $databaseName === '') {
             throw new RuntimeException('MONGODB_URI et MONGODB_DATABASE doivent être configurés.');
         }
 
@@ -29,8 +29,8 @@ class Database
 
     public function getConnection(): MongoDB\Database
     {
-        $databaseName = getenv('MONGODB_DATABASE');
-        if ($databaseName === false || $databaseName === '') {
+        $databaseName = EnvLoader::get('MONGODB_DATABASE');
+        if ($databaseName === null || $databaseName === '') {
             throw new RuntimeException('MONGODB_DATABASE doit être configuré.');
         }
 

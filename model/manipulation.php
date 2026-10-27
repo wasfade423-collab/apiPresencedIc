@@ -44,7 +44,7 @@ class Model
     private function requiredString(array $data, string $key, int $maxLength = 200): string
     {
         $value = $data[$key] ?? null;
-        if (!is_string($value) || trim($value) === '' || mb_strlen(trim($value)) > $maxLength) {
+        if (!is_string($value) || trim($value) === '' || strlen(trim($value)) > $maxLength) {
             throw new ApiException(400, sprintf('Le champ "%s" est obligatoire et invalide.', $key));
         }
 
@@ -54,7 +54,7 @@ class Model
     private function requiredPassword(array $data): string
     {
         $password = $data['password'] ?? null;
-        if (!is_string($password) || trim($password) === '' || mb_strlen($password) > 1024) {
+        if (!is_string($password) || trim($password) === '' || strlen($password) > 1024) {
             throw new ApiException(400, 'Le champ "password" est obligatoire et invalide.');
         }
 
@@ -279,7 +279,7 @@ class Model
 
         $username = $this->requiredString($data, 'username', 100);
         $password = $this->requiredPassword($data);
-        if (mb_strlen($password) < 10) {
+        if (str_leng($password) < 10) {
             throw new ApiException(400, 'Le mot de passe doit contenir au moins 10 caractères.');
         }
         $this->assertUsernameAvailable($username);
@@ -311,7 +311,7 @@ class Model
         }
 
         return array_map(
-            fn (BSONDocument $member): array => $this->documentToArray($member),
+            fn(BSONDocument $member): array => $this->documentToArray($member),
             iterator_to_array($this->db()->Membres->find($filter, ['sort' => ['nom' => 1, 'prenom' => 1]]))
         );
     }
@@ -379,7 +379,7 @@ class Model
                 continue;
             }
 
-            if (!is_string($value) || trim($value) === '' || mb_strlen(trim($value)) > 120) {
+            if (!is_string($value) || trim($value) === '' || str_leng(trim($value)) > 120) {
                 throw new ApiException(400, sprintf('Le champ "%s" est invalide.', $key));
             }
             $updates[$key] = trim($value);
@@ -468,7 +468,7 @@ class Model
         $this->ensurePoleExists($poleObjectId);
 
         return array_map(
-            fn (BSONDocument $member): array => $this->documentToArray($member),
+            fn(BSONDocument $member): array => $this->documentToArray($member),
             iterator_to_array($this->db()->Membres->find([
                 'pole_id' => $poleObjectId,
                 'archived' => ['$ne' => true],
@@ -587,7 +587,7 @@ class Model
         $this->ensurePoleExists($poleObjectId);
 
         return array_map(
-            fn (BSONDocument $presence): array => $this->documentToArray($presence),
+            fn(BSONDocument $presence): array => $this->documentToArray($presence),
             iterator_to_array($this->db()->Presences->find(
                 ['id_pole' => $poleObjectId],
                 ['sort' => ['date_seance' => -1]]
@@ -602,7 +602,7 @@ class Model
         }
 
         return array_map(
-            fn (BSONDocument $presence): array => $this->documentToArray($presence),
+            fn(BSONDocument $presence): array => $this->documentToArray($presence),
             iterator_to_array($this->db()->Presences->find([], ['sort' => ['date_seance' => -1]]))
         );
     }
@@ -636,7 +636,7 @@ class Model
         }
         if (array_key_exists('password', $data)) {
             $password = $this->requiredPassword($data);
-            if (mb_strlen($password) < 10) {
+            if (str_leng($password) < 10) {
                 throw new ApiException(400, 'Le mot de passe doit contenir au moins 10 caractères.');
             }
             $updates['password'] = password_hash($password, PASSWORD_DEFAULT);

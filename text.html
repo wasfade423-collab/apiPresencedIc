@@ -1,0 +1,492 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Console de test pour l’API Présence DIC">
+    <title>Tester l’API Présence DIC</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #172033;
+        background: #f3f6fb;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+      }
+
+      header {
+        padding: 1.5rem max(1.25rem, calc((100% - 1100px) / 2));
+        color: #fff;
+        background: linear-gradient(120deg, #17365d, #245ca6);
+      }
+
+      header h1 {
+        margin: 0 0 0.35rem;
+        font-size: clamp(1.3rem, 3vw, 1.8rem);
+      }
+
+      header p {
+        margin: 0;
+        color: #d7e5f7;
+      }
+
+      main {
+        display: grid;
+        gap: 1rem;
+        max-width: 1100px;
+        margin: 1.5rem auto;
+        padding: 0 1rem;
+      }
+
+      section {
+        padding: 1.25rem;
+        border: 1px solid #dce3ee;
+        border-radius: 12px;
+        background: #fff;
+        box-shadow: 0 3px 12px rgb(21 44 79 / 5%);
+      }
+
+      h2 {
+        margin: 0 0 1rem;
+        font-size: 1.1rem;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 0.35rem;
+        font-size: 0.88rem;
+        font-weight: 650;
+      }
+
+      input,
+      select,
+      textarea,
+      button {
+        font: inherit;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 0.7rem 0.75rem;
+        border: 1px solid #c7d0de;
+        border-radius: 7px;
+        color: #172033;
+        background: #fff;
+      }
+
+      input:focus,
+      select:focus,
+      textarea:focus {
+        border-color: #3478c8;
+        outline: 3px solid rgb(52 120 200 / 16%);
+      }
+
+      textarea {
+        min-height: 145px;
+        resize: vertical;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+        font-size: 0.88rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+      }
+
+      .field {
+        min-width: 0;
+      }
+
+      .stack {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        align-items: end;
+      }
+
+      .toolbar .method {
+        width: 135px;
+      }
+
+      .toolbar .path {
+        flex: 1 1 300px;
+      }
+
+      button {
+        min-height: 42px;
+        padding: 0.6rem 1rem;
+        border: 0;
+        border-radius: 7px;
+        color: #fff;
+        background: #245ca6;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #194a89;
+      }
+
+      button.secondary {
+        border: 1px solid #c7d0de;
+        color: #26364d;
+        background: #f7f9fc;
+      }
+
+      button.secondary:hover {
+        background: #edf2f8;
+      }
+
+      button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+
+      .hint,
+      .status {
+        margin: 0.45rem 0 0;
+        color: #56657a;
+        font-size: 0.88rem;
+        line-height: 1.5;
+      }
+
+      .status {
+        min-height: 1.4rem;
+      }
+
+      .status.error {
+        color: #a32121;
+      }
+
+      .status.success {
+        color: #146b3a;
+      }
+
+      pre {
+        min-height: 130px;
+        max-height: 460px;
+        overflow: auto;
+        margin: 0;
+        padding: 1rem;
+        border-radius: 8px;
+        color: #e5edf8;
+        background: #152238;
+        font: 0.87rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+
+      .response-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: baseline;
+        margin-bottom: 0.65rem;
+      }
+
+      .response-head h2 {
+        margin: 0;
+      }
+
+      @media (max-width: 650px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+
+        section {
+          padding: 1rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Console de test — API Présence DIC</h1>
+      <p>Connecte-toi puis envoie des requêtes à l’API de production.</p>
+    </header>
+
+    <main>
+      <section class="stack" aria-labelledby="connection-title">
+        <div>
+          <h2 id="connection-title">Connexion</h2>
+          <p class="hint">Le jeton reste en mémoire dans cette page et n’est pas enregistré dans le navigateur.</p>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="base-url">URL de base</label>
+            <input id="base-url" type="url" value="https://apipresencedic.site.je/api" autocomplete="url">
+          </div>
+          <div class="field">
+            <label for="token">Jeton Bearer</label>
+            <input id="token" type="password" placeholder="Renseigne-le ici ou connecte-toi ci-dessous" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="username">Nom d’utilisateur</label>
+            <input id="username" type="text" autocomplete="username">
+          </div>
+          <div class="field">
+            <label for="password">Mot de passe</label>
+            <input id="password" type="password" autocomplete="current-password">
+          </div>
+        </div>
+        <div class="toolbar">
+          <div class="field">
+            <label for="role">Rôle (facultatif)</label>
+            <select id="role">
+              <option value="">Détection automatique</option>
+              <option value="admin">Admin</option>
+              <option value="responsable">Responsable</option>
+            </select>
+          </div>
+          <button id="login-button" type="button">Se connecter</button>
+          <button id="logout-button" class="secondary" type="button">Effacer le jeton</button>
+          <p id="login-status" class="status" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section class="stack" aria-labelledby="request-title">
+        <div>
+          <h2 id="request-title">Requête API</h2>
+          <p class="hint">Choisis une route ou saisis un chemin relatif à l’URL de base. Les routes protégées utilisent le jeton ci-dessus.</p>
+        </div>
+        <div class="toolbar">
+          <div class="field method">
+            <label for="method">Méthode</label>
+            <select id="method">
+              <option>GET</option>
+              <option>POST</option>
+              <option>PUT</option>
+              <option>PATCH</option>
+              <option>DELETE</option>
+            </select>
+          </div>
+          <div class="field path">
+            <label for="path">Chemin</label>
+            <input id="path" type="text" value="/poles" spellcheck="false">
+          </div>
+          <button id="send-button" type="button">Envoyer</button>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="body">Corps JSON (facultatif)</label>
+            <textarea id="body" spellcheck="false" placeholder='{"nom":"Dupont"}'></textarea>
+          </div>
+          <div class="field">
+            <label for="preset">Exemples de routes</label>
+            <select id="preset">
+              <option value="">Choisir un exemple…</option>
+              <option data-method="POST" data-path="/auth/login" data-body='{"username":"mon-identifiant","password":"mon-mot-de-passe","role":"admin"}'>Connexion</option>
+              <option data-method="GET" data-path="/poles">Lister les pôles</option>
+              <option data-method="GET" data-path="/membres">Lister les membres</option>
+              <option data-method="POST" data-path="/membres" data-body='{"nom":"Dupont","prenom":"Aïcha","pole_id":"ID_DU_POLE"}'>Créer un membre</option>
+              <option data-method="GET" data-path="/membres/ID_DU_MEMBRE">Détail d’un membre</option>
+              <option data-method="PATCH" data-path="/membres/ID_DU_MEMBRE" data-body='{"prenom":"Aïcha-Marie"}'>Modifier un membre</option>
+              <option data-method="DELETE" data-path="/membres/ID_DU_MEMBRE">Archiver un membre (admin)</option>
+              <option data-method="GET" data-path="/poles/ID_DU_POLE/membres">Membres d’un pôle</option>
+              <option data-method="POST" data-path="/auth/signin" data-body='{"username":"responsable_test","password":"motdepasse5","membre_id":"ID_DU_MEMBRE"}'>Créer un responsable (admin)</option>
+              <option data-method="PUT" data-path="/auth/users/ID_DU_COMPTE" data-body='{"username":"nouvel-identifiant"}'>Modifier un compte</option>
+              <option data-method="DELETE" data-path="/responsables/ID_DU_COMPTE_RESPONSABLE">Archiver un responsable (admin)</option>
+              <option data-method="GET" data-path="/presences">Toutes les présences (admin)</option>
+              <option data-method="POST" data-path="/presences" data-body='{"id_pole":"ID_DU_POLE","date_seance":"2026-10-28T18:30:00+01:00","liste_abs":[]}'>Créer une présence</option>
+              <option data-method="GET" data-path="/presences/ID_DU_POLE">Présences d’un pôle</option>
+            </select>
+            <p class="hint">Remplace les valeurs `ID_...` par les identifiants MongoDB réels avant l’envoi.</p>
+          </div>
+        </div>
+        <p id="request-status" class="status" role="status" aria-live="polite"></p>
+      </section>
+
+      <section aria-labelledby="response-title">
+        <div class="response-head">
+          <h2 id="response-title">Réponse</h2>
+          <span id="http-status" class="hint">Aucune requête envoyée</span>
+        </div>
+        <pre id="response" aria-live="polite">La réponse de l’API apparaîtra ici.</pre>
+      </section>
+    </main>
+
+    <script>
+      (() => {
+        const baseUrlInput = document.getElementById("base-url");
+        const tokenInput = document.getElementById("token");
+        const usernameInput = document.getElementById("username");
+        const passwordInput = document.getElementById("password");
+        const roleInput = document.getElementById("role");
+        const methodInput = document.getElementById("method");
+        const pathInput = document.getElementById("path");
+        const bodyInput = document.getElementById("body");
+        const presetInput = document.getElementById("preset");
+        const loginButton = document.getElementById("login-button");
+        const logoutButton = document.getElementById("logout-button");
+        const sendButton = document.getElementById("send-button");
+        const loginStatus = document.getElementById("login-status");
+        const requestStatus = document.getElementById("request-status");
+        const httpStatus = document.getElementById("http-status");
+        const responseOutput = document.getElementById("response");
+
+        function setStatus(element, message, kind = "") {
+          element.textContent = message;
+          element.className = `status${kind ? ` ${kind}` : ""}`;
+        }
+
+        function apiBaseUrl() {
+          const value = baseUrlInput.value.trim().replace(/\/+$/, "");
+          if (!value) {
+            throw new Error("Renseigne l’URL de base de l’API.");
+          }
+          const url = new URL(value);
+          if (!["http:", "https:"].includes(url.protocol)) {
+            throw new Error("L’URL de base doit utiliser HTTP ou HTTPS.");
+          }
+          return value;
+        }
+
+        async function readResponse(response) {
+          const text = await response.text();
+          if (!text) {
+            return null;
+          }
+          try {
+            return JSON.parse(text);
+          } catch {
+            return text;
+          }
+        }
+
+        function displayResponse(status, payload) {
+          httpStatus.textContent = `HTTP ${status}`;
+          responseOutput.textContent = payload === null
+            ? "(Réponse vide)"
+            : typeof payload === "string"
+              ? payload
+              : JSON.stringify(payload, null, 2);
+        }
+
+        async function sendRequest(method, path, body, includeToken = true) {
+          const baseUrl = apiBaseUrl();
+          const relativePath = path.trim().replace(/^\/+/, "");
+          if (!relativePath) {
+            throw new Error("Renseigne le chemin de la route.");
+          }
+
+          const headers = { Accept: "application/json" };
+          if (includeToken && tokenInput.value.trim()) {
+            headers.Authorization = `Bearer ${tokenInput.value.trim()}`;
+          }
+
+          const options = { method, headers };
+          if (body.trim() && method !== "GET" && method !== "DELETE") {
+            headers["Content-Type"] = "application/json";
+            try {
+              options.body = JSON.stringify(JSON.parse(body));
+            } catch {
+              throw new Error("Le corps de la requête n’est pas un JSON valide.");
+            }
+          }
+
+          const response = await fetch(`${baseUrl}/${relativePath}`, options);
+          return { response, payload: await readResponse(response) };
+        }
+
+        loginButton.addEventListener("click", async () => {
+          setStatus(loginStatus, "");
+          loginButton.disabled = true;
+          try {
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value;
+            if (!username || !password) {
+              throw new Error("Renseigne le nom d’utilisateur et le mot de passe.");
+            }
+            const body = { username, password };
+            if (roleInput.value) {
+              body.role = roleInput.value;
+            }
+            const { response, payload } = await sendRequest(
+              "POST",
+              "/auth/login",
+              JSON.stringify(body),
+              false
+            );
+            displayResponse(response.status, payload);
+            const loginResult = payload && payload.response;
+            if (!response.ok || !loginResult || typeof loginResult.token !== "string") {
+              const apiError = loginResult && loginResult.error;
+              throw new Error(apiError || `Connexion refusée (HTTP ${response.status}).`);
+            }
+            tokenInput.value = loginResult.token;
+            passwordInput.value = "";
+            setStatus(
+              loginStatus,
+              `Connecté en tant que ${loginResult.user.username} (${loginResult.user.role}).`,
+              "success"
+            );
+          } catch (error) {
+            setStatus(loginStatus, error.message, "error");
+          } finally {
+            loginButton.disabled = false;
+          }
+        });
+
+        logoutButton.addEventListener("click", () => {
+          tokenInput.value = "";
+          setStatus(loginStatus, "Jeton effacé de la page.");
+        });
+
+        presetInput.addEventListener("change", () => {
+          const option = presetInput.selectedOptions[0];
+          if (!option || !option.dataset.method) {
+            return;
+          }
+          methodInput.value = option.dataset.method;
+          pathInput.value = option.dataset.path;
+          bodyInput.value = option.dataset.body || "";
+        });
+
+        sendButton.addEventListener("click", async () => {
+          setStatus(requestStatus, "");
+          sendButton.disabled = true;
+          try {
+            const { response, payload } = await sendRequest(
+              methodInput.value,
+              pathInput.value,
+              bodyInput.value
+            );
+            displayResponse(response.status, payload);
+            if (response.ok) {
+              setStatus(requestStatus, "Requête terminée.", "success");
+            } else {
+              const apiError = payload && payload.response && payload.response.error;
+              setStatus(
+                requestStatus,
+                apiError || `La requête a échoué (HTTP ${response.status}).`,
+                "error"
+              );
+            }
+          } catch (error) {
+            httpStatus.textContent = "Requête non envoyée";
+            responseOutput.textContent = error.message;
+            setStatus(requestStatus, error.message, "error");
+          } finally {
+            sendButton.disabled = false;
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>

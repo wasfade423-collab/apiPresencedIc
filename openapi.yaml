@@ -1,0 +1,922 @@
+openapi: 3.0.3
+info:
+  title: API Présence DIC
+  version: 1.0.0
+  description: |
+    Spécification OpenAPI de l’API Présence DIC.
+
+    Les réponses suivent le format `{code, response}`. Toutes les routes sauf
+    `POST /auth/login` nécessitent un jeton Bearer. Les jetons expirent après
+    huit heures.
+servers:
+  - url: https://apipresencedic.site.je/api
+    description: Serveur de production
+tags:
+  - name: Authentification
+  - name: Membres
+  - name: Pôles
+  - name: Présences
+  - name: Responsables
+paths:
+  /auth/login:
+    post:
+      tags: [Authentification]
+      summary: Se connecter
+      description: |
+        Authentifie un administrateur ou un responsable actif. Le rôle peut
+        être omis si le nom d’utilisateur correspond à un seul compte.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              username: mon-identifiant
+              password: mon-mot-de-passe
+              role: responsable
+      responses:
+        '200':
+          description: Connexion réussie.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/signin:
+    post:
+      tags: [Responsables]
+      summary: Créer un compte responsable
+      description: |
+        Réservé à l’administrateur. Le membre doit être actif, appartenir à un
+        pôle et ne pas déjà avoir de compte responsable actif. Le nom
+        d’utilisateur doit être unique et le mot de passe doit comporter au
+        moins cinq caractères. Cette opération ne connecte pas le nouveau
+        responsable.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateResponsibleRequest'
+            example:
+              username: responsable_test
+              password: motdepasse5
+              membre_id: 66a000000000000000000001
+      responses:
+        '201':
+          description: Compte responsable créé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResponsibleCreatedEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /auth/users/{idUser}:
+    put:
+      tags: [Authentification]
+      summary: Modifier les identifiants d’un compte
+      description: |
+        L’administrateur peut modifier son compte ou un compte responsable.
+        Un responsable ne peut modifier que son propre compte. Envoyer au moins
+        un champ. Un nouveau mot de passe doit comporter au moins cinq
+        caractères. En cas de changement de mot de passe, les autres jetons du
+        compte sont révoqués; le jeton courant reste valide si l’utilisateur
+        modifie son propre compte.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRequest'
+            examples:
+              username:
+                value:
+                  username: nouvel-identifiant
+              password:
+                value:
+                  password: nouveaumdp5
+              both:
+                value:
+                  username: nouvel-identifiant
+                  password: nouveaumdp5
+      responses:
+        '200':
+          description: Compte modifié.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpdatedUserEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /membres:
+    get:
+      tags: [Membres]
+      summary: Lister les membres actifs
+      description: Un responsable ne voit que les membres de son pôle.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Liste des membres actifs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [Membres]
+      summary: Créer un membre
+      description: |
+        Crée un membre dans un pôle existant. Un responsable ne peut créer un
+        membre que dans son propre pôle.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMemberRequest'
+            example:
+              nom: Dupont
+              prenom: Aïcha
+              pole_id: 66a000000000000000000010
+      responses:
+        '201':
+          description: Membre créé; `archived` vaut `false` et `archived_date` vaut `null`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /membres/{idMembre}:
+    parameters:
+      - $ref: '#/components/parameters/MemberId'
+    get:
+      tags: [Membres]
+      summary: Récupérer un membre
+      description: Retourne un membre actif autorisé pour le compte connecté.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Membre trouvé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    patch:
+      tags: [Membres]
+      summary: Modifier un membre
+      description: |
+        Modifie `nom` et/ou `prenom`. Seul l’administrateur peut aussi modifier
+        `pole_id`. Si un responsable actif est lié au membre, son pôle est
+        synchronisé lors du déplacement.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemberRequest'
+            examples:
+              name:
+                value:
+                  prenom: Aïcha-Marie
+              move:
+                value:
+                  pole_id: 66a000000000000000000011
+      responses:
+        '200':
+          description: Membre modifié.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    delete:
+      tags: [Membres]
+      summary: Archiver un membre
+      description: Réservé à l’administrateur. L’historique du membre est conservé.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Membre archivé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchivedEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /poles:
+    get:
+      tags: [Pôles]
+      summary: Lister les pôles
+      description: |
+        Retourne les pôles visibles et leur nombre de membres actifs dans
+        `nbreMembre`. Un responsable ne voit que son pôle.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Liste des pôles.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PoleListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /poles/{idPole}/membres:
+    get:
+      tags: [Pôles, Membres]
+      summary: Lister les membres d’un pôle
+      description: Un responsable ne peut consulter que son propre pôle.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PoleId'
+      responses:
+        '200':
+          description: Membres actifs du pôle.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberListEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /presences:
+    get:
+      tags: [Présences]
+      summary: Lister toutes les séances
+      description: Réservé à l’administrateur. Retourne les séances avec leurs IDs de pôle, d’auteur et d’absents.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Liste globale des séances.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PresenceListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      tags: [Présences]
+      summary: Créer une séance
+      description: |
+        L’auteur est fixé automatiquement au compte authentifié; ne pas envoyer
+        `auteur`. Un responsable ne peut créer une séance que pour son pôle.
+        Tous les membres absents doivent être actifs et appartenir au pôle.
+        `liste_abs` peut être omis ou être un tableau vide. Le compteur
+        `nbre_abs` de chaque membre absent est incrémenté.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePresenceRequest'
+            example:
+              id_pole: 66a000000000000000000010
+              date_seance: '2026-10-28T18:30:00+01:00'
+              liste_abs:
+                - 66a000000000000000000001
+      responses:
+        '201':
+          description: Séance créée.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedPresenceEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /presences/{idPole}:
+    get:
+      tags: [Présences]
+      summary: Lister les séances d’un pôle
+      description: |
+        Retourne `id_pole` et `nom_pole` une seule fois à la racine. Chaque
+        séance fournit les détails de l’auteur et des membres absents.
+        Un responsable ne peut consulter que son pôle.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PoleId'
+      responses:
+        '200':
+          description: Séances du pôle.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolePresenceEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /responsables/{idResponsable}:
+    delete:
+      tags: [Responsables]
+      summary: Archiver un compte responsable
+      description: |
+        Réservé à l’administrateur. L’ID attendu est celui du compte
+        responsable, pas celui du membre associé. Le responsable archivé ne
+        peut plus se connecter ni utiliser ses anciens jetons.
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ResponsibleId'
+      responses:
+        '200':
+          description: Compte responsable archivé.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchivedEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+      description: Jeton obtenu avec `POST /auth/login`.
+  parameters:
+    MemberId:
+      name: idMembre
+      in: path
+      required: true
+      description: Identifiant MongoDB du membre (24 caractères hexadécimaux).
+      schema:
+        $ref: '#/components/schemas/ObjectId'
+    PoleId:
+      name: idPole
+      in: path
+      required: true
+      description: Identifiant MongoDB du pôle (24 caractères hexadécimaux).
+      schema:
+        $ref: '#/components/schemas/ObjectId'
+    UserId:
+      name: idUser
+      in: path
+      required: true
+      description: Identifiant MongoDB du compte (24 caractères hexadécimaux).
+      schema:
+        $ref: '#/components/schemas/ObjectId'
+    ResponsibleId:
+      name: idResponsable
+      in: path
+      required: true
+      description: Identifiant MongoDB du compte responsable.
+      schema:
+        $ref: '#/components/schemas/ObjectId'
+  schemas:
+    ObjectId:
+      type: string
+      pattern: '^[a-fA-F0-9]{24}$'
+      example: 66a000000000000000000001
+    ApiEnvelope:
+      type: object
+      required: [code, response]
+      properties:
+        code:
+          type: integer
+          example: 200
+        response: {}
+    ErrorEnvelope:
+      type: object
+      required: [code, response]
+      properties:
+        code:
+          type: integer
+          example: 400
+        response:
+          type: object
+          required: [error]
+          properties:
+            error:
+              type: string
+              example: Identifiant MongoDB invalide.
+    LoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          maxLength: 100
+        password:
+          type: string
+          maxLength: 1024
+        role:
+          type: string
+          enum: [admin, responsable]
+    LoginUser:
+      type: object
+      required: [id, username, role]
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, responsable]
+    LoginResponse:
+      type: object
+      required: [token, token_type, expires_at, user]
+      properties:
+        token:
+          type: string
+        token_type:
+          type: string
+          example: Bearer
+        expires_at:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/LoginUser'
+    LoginEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            code:
+              example: 200
+            response:
+              $ref: '#/components/schemas/LoginResponse'
+    CreateResponsibleRequest:
+      type: object
+      required: [username, password, membre_id]
+      properties:
+        username:
+          type: string
+          maxLength: 100
+        password:
+          type: string
+          minLength: 5
+          maxLength: 1024
+        membre_id:
+          $ref: '#/components/schemas/ObjectId'
+    ResponsibleCreated:
+      type: object
+      required: [id, username, membre_id, pole_id, role, archived, archived_date]
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        username:
+          type: string
+        membre_id:
+          $ref: '#/components/schemas/ObjectId'
+        pole_id:
+          $ref: '#/components/schemas/ObjectId'
+        role:
+          type: string
+          enum: [responsable]
+        archived:
+          type: boolean
+          example: false
+        archived_date:
+          type: string
+          nullable: true
+          example: null
+    ResponsibleCreatedEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            code:
+              example: 201
+            response:
+              $ref: '#/components/schemas/ResponsibleCreated'
+    UpdateUserRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        username:
+          type: string
+          maxLength: 100
+        password:
+          type: string
+          minLength: 5
+          maxLength: 1024
+    UpdatedUser:
+      type: object
+      required: [id, username, role]
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        username:
+          type: string
+        role:
+          type: string
+          enum: [admin, responsable]
+    UpdatedUserEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            code:
+              example: 200
+            response:
+              $ref: '#/components/schemas/UpdatedUser'
+    Member:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        nom:
+          type: string
+        prenom:
+          type: string
+        pole_id:
+          $ref: '#/components/schemas/ObjectId'
+        nbre_abs:
+          type: integer
+          minimum: 0
+        archived:
+          type: boolean
+        archived_date:
+          type: string
+          format: date-time
+          nullable: true
+    MemberListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            response:
+              type: array
+              items:
+                $ref: '#/components/schemas/Member'
+    CreateMemberRequest:
+      type: object
+      required: [nom, prenom, pole_id]
+      properties:
+        nom:
+          type: string
+          maxLength: 120
+        prenom:
+          type: string
+          maxLength: 120
+        pole_id:
+          $ref: '#/components/schemas/ObjectId'
+    UpdateMemberRequest:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        nom:
+          type: string
+          maxLength: 120
+        prenom:
+          type: string
+          maxLength: 120
+        pole_id:
+          $ref: '#/components/schemas/ObjectId'
+    MemberCreated:
+      type: object
+      required: [_id, nom, prenom, pole_id, nbre_abs, archived, archived_date]
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        nom:
+          type: string
+        prenom:
+          type: string
+        pole_id:
+          $ref: '#/components/schemas/ObjectId'
+        nbre_abs:
+          type: integer
+          example: 0
+        archived:
+          type: boolean
+          example: false
+        archived_date:
+          type: string
+          nullable: true
+          example: null
+    MemberEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            response:
+              $ref: '#/components/schemas/Member'
+    Pole:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        nom:
+          type: string
+        nbreMembre:
+          type: integer
+          minimum: 0
+    PoleListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            response:
+              type: array
+              items:
+                $ref: '#/components/schemas/Pole'
+    Archived:
+      type: object
+      required: [id, archived, archived_date]
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        archived:
+          type: boolean
+          example: true
+        archived_date:
+          type: string
+          format: date-time
+    ArchivedEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            response:
+              $ref: '#/components/schemas/Archived'
+    CreatePresenceRequest:
+      type: object
+      required: [id_pole, date_seance]
+      additionalProperties: false
+      properties:
+        id_pole:
+          $ref: '#/components/schemas/ObjectId'
+        date_seance:
+          type: string
+          format: date-time
+        liste_abs:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/ObjectId'
+          default: []
+    StoredPresence:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        id_pole:
+          $ref: '#/components/schemas/ObjectId'
+        date_seance:
+          type: string
+          format: date-time
+        liste_abs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ObjectId'
+        auteur:
+          $ref: '#/components/schemas/ObjectId'
+    CreatedPresence:
+      type: object
+      required: [_id, id_pole, date_seance, liste_abs, auteur]
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        id_pole:
+          $ref: '#/components/schemas/ObjectId'
+        date_seance:
+          type: string
+          format: date-time
+        liste_abs:
+          type: array
+          items:
+            $ref: '#/components/schemas/ObjectId'
+        auteur:
+          $ref: '#/components/schemas/ObjectId'
+    CreatedPresenceEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            code:
+              example: 201
+            response:
+              $ref: '#/components/schemas/CreatedPresence'
+    PresenceListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            response:
+              type: array
+              items:
+                $ref: '#/components/schemas/StoredPresence'
+    PersonDetails:
+      type: object
+      required: [id, nom, prenom]
+      properties:
+        id:
+          $ref: '#/components/schemas/ObjectId'
+        nom:
+          type: string
+          nullable: true
+        prenom:
+          type: string
+          nullable: true
+    PolePresence:
+      type: object
+      properties:
+        _id:
+          $ref: '#/components/schemas/ObjectId'
+        date_seance:
+          type: string
+          format: date-time
+        liste_abs:
+          type: array
+          items:
+            $ref: '#/components/schemas/PersonDetails'
+        auteur:
+          allOf:
+            - $ref: '#/components/schemas/PersonDetails'
+          nullable: true
+    PolePresenceResponse:
+      type: object
+      required: [id_pole, nom_pole, presences]
+      properties:
+        id_pole:
+          $ref: '#/components/schemas/ObjectId'
+        nom_pole:
+          type: string
+          nullable: true
+        presences:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolePresence'
+    PolePresenceEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/ApiEnvelope'
+        - type: object
+          properties:
+            response:
+              $ref: '#/components/schemas/PolePresenceResponse'
+  responses:
+    BadRequest:
+      description: JSON, identifiant ou données invalides.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Unauthorized:
+      description: Jeton absent, invalide ou expiré, ou identifiants invalides.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Forbidden:
+      description: Rôle insuffisant ou accès non autorisé au pôle.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    NotFound:
+      description: Route ou ressource introuvable.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    Conflict:
+      description: Conflit de données, par exemple compte déjà associé ou séance existante.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+    InternalError:
+      description: Erreur interne du serveur.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'

@@ -650,6 +650,7 @@ class Model
             ['sort' => ['date_seance' => -1]]
         ) as $presence) {
             $presenceData = $this->documentToArray($presence);
+            unset($presenceData['id_pole']);
             $absenceDetails = [];
             foreach ($presence['liste_abs'] ?? [] as $memberId) {
                 $absenceDetails[] = $this->presenceMemberDetails($memberId);

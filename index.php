@@ -7,8 +7,17 @@ require_once __DIR__ . '/routes.php';
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
+function applyCorsHeaders(): void
+{
+    header('Access-Control-Allow-Origin: *');
+    header('Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With');
+    header('Access-Control-Max-Age: 86400');
+}
+
 function sendJson(int $statusCode, array $payload): never
 {
+    applyCorsHeaders();
     http_response_code($statusCode);
     echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     exit;
@@ -16,6 +25,7 @@ function sendJson(int $statusCode, array $payload): never
 
 $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
 if ($method === 'OPTIONS') {
+    applyCorsHeaders();
     header('Allow: GET, POST, PUT, PATCH, DELETE, OPTIONS');
     http_response_code(204);
     exit;

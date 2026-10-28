@@ -27,10 +27,10 @@ if (!is_string($path)) {
     $path = '/';
 }
 
-if (str_starts_with($path, '/api.php/')) {
-    $path = substr($path, strlen('/api.php'));
+if (str_starts_with($path, '/index.php/')) {
+    $path = substr($path, strlen('/index.php'));
 }
-if ($path === '/api.php') {
+if ($path === '/index.php') {
     $path = '/';
 }
 if (str_starts_with($path, '/api/')) {
@@ -78,6 +78,6 @@ try {
     ));
     sendJson(500, [
         'code' => 500,
-        'response' => ['error' => 'Une erreur interne est survenue.'],
+        'response' => ['error' => 'Une erreur interne est survenue.' . $exception->getMessage()],
     ]);
 }

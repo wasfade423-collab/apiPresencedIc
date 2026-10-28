@@ -34,7 +34,7 @@ class Model
 
     private function objectId(string $id): ObjectId
     {
-        if (!ObjectId::isValid($id)) {
+        if (preg_match('/^[a-f0-9]{24}$/i', $id) !== 1) {
             throw new ApiException(400, 'Identifiant MongoDB invalide.');
         }
 
@@ -155,7 +155,7 @@ class Model
         }
     }
 
-    private function newToken(array $user, string $role): array
+    private function newToken(array|BSONDocument $user, string $role): array
     {
         $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
         $expiresAt = new DateTimeImmutable('+8 hours');
@@ -181,8 +181,9 @@ class Model
 
     public function authenticate(string $token): array
     {
+        $tokenHash = hash('sha256', $token);
         $storedToken = $this->db()->Tokens->findOne([
-            'tokenHash' => hash('sha256', $token),
+            'tokenHash' => $tokenHash,
             'expiresAt' => ['$gt' => new UTCDateTime(new DateTimeImmutable())],
         ]);
 
@@ -216,11 +217,13 @@ class Model
             'role' => $role,
             'memberId' => $userData['membre_id'] ?? null,
             'poleId' => $userData['pole_id'] ?? null,
+            'tokenHash' => $tokenHash,
         ];
     }
 
     public function login(array $data): array
     {
+
         $username = $this->requiredString($data, 'username', 100);
         $password = $this->requiredPassword($data);
         $requestedRole = $data['role'] ?? null;
@@ -279,8 +282,8 @@ class Model
 
         $username = $this->requiredString($data, 'username', 100);
         $password = $this->requiredPassword($data);
-        if (str_leng($password) < 10) {
-            throw new ApiException(400, 'Le mot de passe doit contenir au moins 10 caractères.');
+        if (strlen($password) < 5) {
+            throw new ApiException(400, 'Le mot de passe doit contenir au moins 5 caractères.');
         }
         $this->assertUsernameAvailable($username);
 
@@ -288,6 +291,7 @@ class Model
             'membre_id' => $this->objectId($memberId),
             'pole_id' => $this->objectId($poleId),
             'archived' => false,
+            'archived_date' => null,
             'date_debut' => new UTCDateTime(new DateTimeImmutable()),
             'username' => $username,
             'password' => password_hash($password, PASSWORD_DEFAULT),
@@ -300,6 +304,8 @@ class Model
             'membre_id' => $memberId,
             'pole_id' => $poleId,
             'role' => 'responsable',
+            'archived' => false,
+            'archived_date' => null,
         ];
     }
 
@@ -341,6 +347,7 @@ class Model
             'pole_id' => $poleObjectId,
             'nbre_abs' => 0,
             'archived' => false,
+            'archived_date' => null,
         ]);
 
         return [
@@ -350,6 +357,7 @@ class Model
             'pole_id' => $poleId,
             'nbre_abs' => 0,
             'archived' => false,
+            'archived_date' => null,
         ];
     }
 
@@ -379,7 +387,7 @@ class Model
                 continue;
             }
 
-            if (!is_string($value) || trim($value) === '' || str_leng(trim($value)) > 120) {
+            if (!is_string($value) || trim($value) === '' || strlen(trim($value)) > 120) {
                 throw new ApiException(400, sprintf('Le champ "%s" est invalide.', $key));
             }
             $updates[$key] = trim($value);
@@ -429,16 +437,21 @@ class Model
 
     public function deleteMember(string $id): array
     {
+        $archivedAt = new UTCDateTime(new DateTimeImmutable());
         $result = $this->db()->Membres->updateOne(
             ['_id' => $this->objectId($id), 'archived' => ['$ne' => true]],
-            ['$set' => ['archived' => true]]
+            ['$set' => ['archived' => true, 'archived_date' => $archivedAt]]
         );
 
         if ($result->getModifiedCount() !== 1) {
             throw new ApiException(404, 'Membre introuvable.');
         }
 
-        return ['id' => $id, 'archived' => true];
+        return [
+            'id' => $id,
+            'archived' => true,
+            'archived_date' => $this->normalize($archivedAt),
+        ];
     }
 
     public function listPoles(array $actor): array
@@ -451,7 +464,7 @@ class Model
         $poles = [];
         foreach ($this->db()->Poles->find($filter, ['sort' => ['nom' => 1]]) as $pole) {
             $poleData = $this->documentToArray($pole);
-            $poleData['nombreMembre'] = $this->db()->Membres->countDocuments([
+            $poleData['nbreMembre'] = $this->db()->Membres->countDocuments([
                 'pole_id' => $pole['_id'],
                 'archived' => ['$ne' => true],
             ]);
@@ -515,21 +528,9 @@ class Model
             $absentObjectIds[] = $this->objectId($absentId);
         }
 
-        if ($actor['role'] === 'responsable') {
-            $authorId = $actor['memberId'] ?? null;
-            if (!is_string($authorId) || $authorId === '') {
-                throw new ApiException(403, 'Le compte responsable n’est associé à aucun membre.');
-            }
-            $author = $this->findActiveMember($authorId);
-            if (($author['pole_id'] ?? null) !== $poleId) {
-                throw new ApiException(403, 'Le compte responsable n’est pas associé à ce pôle.');
-            }
-        } else {
-            $authorId = $this->requiredString($data, 'auteur');
-            $author = $this->findActiveMember($authorId);
-            if (($author['pole_id'] ?? null) !== $poleId) {
-                throw new ApiException(400, 'L’auteur doit appartenir au pôle de la séance.');
-            }
+        $authorId = $actor['id'] ?? null;
+        if (!is_string($authorId) || $authorId === '') {
+            throw new ApiException(403, 'Le compte connecté ne possède pas un identifiant valide.');
         }
 
         $presence = [
@@ -580,19 +581,92 @@ class Model
         ];
     }
 
+    private function presenceMemberDetails(mixed $memberId): array
+    {
+        $id = (string) $memberId;
+        $member = $this->db()->Membres->findOne(['_id' => $this->objectId($id)]);
+
+        return [
+            'id' => $id,
+            'nom' => $member['nom'] ?? null,
+            'prenom' => $member['prenom'] ?? null,
+        ];
+    }
+
+    private function presenceAuthorDetails(mixed $authorId): array
+    {
+        $id = (string) $authorId;
+        $objectId = $this->objectId($id);
+
+        // Older presence records store the member ID directly as the author.
+        $member = $this->db()->Membres->findOne(['_id' => $objectId]);
+        if ($member !== null) {
+            return [
+                'id' => $id,
+                'nom' => $member['nom'] ?? null,
+                'prenom' => $member['prenom'] ?? null,
+            ];
+        }
+
+        $responsable = $this->db()->Responsables->findOne(['_id' => $objectId]);
+        if ($responsable !== null) {
+            $memberId = $responsable['membre_id'] ?? null;
+            if ($memberId instanceof ObjectId) {
+                $member = $this->db()->Membres->findOne(['_id' => $memberId]);
+
+                return [
+                    'id' => $id,
+                    'nom' => $member['nom'] ?? null,
+                    'prenom' => $member['prenom'] ?? null,
+                ];
+            }
+
+            return [
+                'id' => $id,
+                'nom' => $responsable['username'] ?? null,
+                'prenom' => '',
+            ];
+        }
+
+        $admin = $this->db()->Admin->findOne(['_id' => $objectId]);
+
+        return [
+            'id' => $id,
+            'nom' => $admin['username'] ?? null,
+            'prenom' => '',
+        ];
+    }
+
     public function listPresencesForPole(string $poleId, array $actor): array
     {
         $poleObjectId = $this->objectId($poleId);
         $this->assertPoleAccess($poleId, $actor);
         $this->ensurePoleExists($poleObjectId);
+        $pole = $this->db()->Poles->findOne(['_id' => $poleObjectId]);
+        $presences = [];
 
-        return array_map(
-            fn(BSONDocument $presence): array => $this->documentToArray($presence),
-            iterator_to_array($this->db()->Presences->find(
-                ['id_pole' => $poleObjectId],
-                ['sort' => ['date_seance' => -1]]
-            ))
-        );
+        foreach ($this->db()->Presences->find(
+            ['id_pole' => $poleObjectId],
+            ['sort' => ['date_seance' => -1]]
+        ) as $presence) {
+            $presenceData = $this->documentToArray($presence);
+            $absenceDetails = [];
+            foreach ($presence['liste_abs'] ?? [] as $memberId) {
+                $absenceDetails[] = $this->presenceMemberDetails($memberId);
+            }
+
+            $presenceData['liste_abs'] = $absenceDetails;
+            $presenceData['auteur'] = isset($presence['auteur'])
+                ? $this->presenceAuthorDetails($presence['auteur'])
+                : null;
+            $presences[] = $presenceData;
+        }
+
+        return [
+            'id_pole' => $poleId,
+            'nom_pole' => $pole['nom'] ?? null,
+            'presences' => $presences,
+        ];
     }
 
     public function listAllPresences(array $actor): array
@@ -636,8 +710,8 @@ class Model
         }
         if (array_key_exists('password', $data)) {
             $password = $this->requiredPassword($data);
-            if (str_leng($password) < 10) {
-                throw new ApiException(400, 'Le mot de passe doit contenir au moins 10 caractères.');
+            if (strlen($password) < 5) {
+                throw new ApiException(400, 'Le mot de passe doit contenir au moins 5 caractères.');
             }
             $updates['password'] = password_hash($password, PASSWORD_DEFAULT);
         }
@@ -646,6 +720,22 @@ class Model
         }
 
         $this->db()->selectCollection($collectionName)->updateOne(['_id' => $userId], ['$set' => $updates]);
+
+        if (array_key_exists('password', $updates)) {
+            $userRole = $collectionName === 'Admin' ? 'admin' : 'responsable';
+            $tokenFilter = [
+                'user_id' => $userId,
+                'role' => $userRole,
+            ];
+            if (
+                ($actor['role'] ?? null) === $userRole
+                && strtolower((string) ($actor['id'] ?? '')) === strtolower($id)
+                && is_string($actor['tokenHash'] ?? null)
+            ) {
+                $tokenFilter['tokenHash'] = ['$ne' => $actor['tokenHash']];
+            }
+            $this->db()->Tokens->deleteMany($tokenFilter);
+        }
 
         return [
             'id' => $id,
@@ -656,15 +746,20 @@ class Model
 
     public function deleteResponsable(string $id): array
     {
+        $archivedAt = new UTCDateTime(new DateTimeImmutable());
         $result = $this->db()->Responsables->updateOne(
             ['_id' => $this->objectId($id), 'archived' => ['$ne' => true]],
-            ['$set' => ['archived' => true]]
+            ['$set' => ['archived' => true, 'archived_date' => $archivedAt]]
         );
 
         if ($result->getModifiedCount() !== 1) {
             throw new ApiException(404, 'Responsable introuvable.');
         }
 
-        return ['id' => $id, 'archived' => true];
+        return [
+            'id' => $id,
+            'archived' => true,
+            'archived_date' => $this->normalize($archivedAt),
+        ];
     }
 }

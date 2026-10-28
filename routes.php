@@ -65,9 +65,9 @@ function dispatchRequest(string $method, string $path, array $body, array $heade
 
     $actor = $model->authenticate($matches[1]);
     $result = match ($action) {
-        'create_responsable' => $actor['role'] === 'responsable'
+        'create_responsable' => $actor['role'] === 'admin'
             ? [201, $model->createResponsible($body, $actor)]
-            : throw new ApiException(403, 'La création de comptes est réservée aux responsables.'),
+            : throw new ApiException(403, 'La création de comptes est réservée à l’administrateur.'),
         'update_user' => in_array($actor['role'], ['admin', 'responsable'], true)
             ? [200, $model->updateUser($routeParams[0], $body, $actor)]
             : throw new ApiException(403, 'Accès interdit.'),
